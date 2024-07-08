@@ -22,7 +22,6 @@ const scrapeJobs = async () => {
       const location = $(element).find('div.info:contains("Location") strong').text().trim();
       const deadline = $(element).find('div.info:contains("Deadline") strong').text().trim();
 
-      // Check if the job already exists in jobStorage
       const existingJob = jobStorage.find(job => job.title === title && job.company === company);
       const id = existingJob ? existingJob.id : generateId();
 
@@ -38,9 +37,15 @@ const scrapeJobs = async () => {
 
 const updateJobStorage = async () => {
   const newJobs = await scrapeJobs();
-  if (newJobs.length > jobStorage.length) {
-    jobStorage = newJobs;
-  }
+
+  // Update the jobStorage by comparing it with newJobs
+  jobStorage = newJobs.map(newJob => {
+    const existingJob = jobStorage.find(job => job.title === newJob.title && job.company === newJob.company);
+    return existingJob ? { ...newJob, id: existingJob.id } : newJob;
+  });
+
+  // Remove jobs that are no longer available
+  jobStorage = jobStorage.filter(job => newJobs.find(newJob => newJob.id === job.id));
 };
 
 app.get('/jobs', async (req, res) => {

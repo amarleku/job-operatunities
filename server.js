@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const cors = require('cors');
 const app = express();
 const port = 3000;
 
@@ -10,6 +11,25 @@ const generateId = () => {
   return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 };
 
+const formatDate = (dateString) => {
+  const [day, month, year] = dateString.split(' ');
+  const monthMap = {
+    Jan: '01',
+    Feb: '02',
+    Mar: '03',
+    Apr: '04',
+    May: '05',
+    Jun: '06',
+    Jul: '07',
+    Aug: '08',
+    Sep: '09',
+    Oct: '10',
+    Nov: '11',
+    Dec: '12',
+  };
+  return `${day}-${monthMap[month]}-${year}`;
+};
+
 const scrapeJobs = async () => {
   try {
     const { data } = await axios.get('https://balfin.al/human-resources/career-opportunities/');
@@ -17,15 +37,18 @@ const scrapeJobs = async () => {
     const jobs = [];
 
     $('div.content').each((index, element) => {
-      const title = $(element).find('div.title.small').text().trim();
+      const titleElement = $(element).find('a');
+      const title = titleElement.find('div.title.small').text().trim();
+      const link = titleElement.attr('href');
       const company = $(element).find('div.info:contains("Company") strong').text().trim();
       const location = $(element).find('div.info:contains("Location") strong').text().trim();
-      const deadline = $(element).find('div.info:contains("Deadline") strong').text().trim();
+      const deadlineRaw = $(element).find('div.info:contains("Deadline") strong').text().trim();
+      const deadline = formatDate(deadlineRaw);
 
       const existingJob = jobStorage.find(job => job.title === title && job.company === company);
       const id = existingJob ? existingJob.id : generateId();
 
-      jobs.push({ id, title, company, location, deadline });
+      jobs.push({ id, title, link, company, location, deadline });
     });
 
     return jobs;
@@ -45,8 +68,21 @@ const updateJobStorage = async () => {
   });
 
   // Remove jobs that are no longer available
-  jobStorage = jobStorage.filter(job => newJobs.find(newJob => newJob.id === job.id));
+  jobStorage = jobStorage.filter(job => newJobs.find(newJob => newJob.title === job.title && newJob.company === job.company));
 };
+
+// Configure CORS to allow only a specific domain
+const allowedOrigin = 'http://example.com';  // Replace with your allowed domain
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (origin === allowedOrigin || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+}));
 
 app.get('/jobs', async (req, res) => {
   await updateJobStorage();
